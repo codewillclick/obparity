@@ -1,0 +1,17 @@
+{
+  "name": "obparity",
+  "version": "1.0.0",
+  "description": "object sharing instance on cleint and server alike",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "server",
+    "client",
+    "parity",
+    "object"
+  ],
+  "author": "codewillclick",
+  "license": "MIT"
+}
