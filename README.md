@@ -55,7 +55,7 @@ class ValueSayer extends ParityObject {
   getClientMethods() {
     return ['sayit']
   }
-  asynch sayit(prefix) {
+  async sayit(prefix) {
     return {
       value:`${prefix && prefix+' ' || ''}${this.value}`
     }
