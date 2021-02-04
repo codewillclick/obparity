@@ -174,7 +174,6 @@ class P2 extends ParityObject {
 	}
 	
 	getClientMethods() {
-		//return super.getClientMethods().concat(['pong'])
 		return ['pong']
 	}
 	
