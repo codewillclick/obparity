@@ -36,7 +36,7 @@ Client-side `Looksie` would have access to...
 * `listThings()`
 * `saveNewThing()`
 
-... but not to `debugDatabase()`, since that sounds like something you don't need the client to see.  (This should be configured server-object-side, but right now it's in the client source...  Well, I'll get around to it.)
+... but not to `debugDatabase()`, since that sounds like something you don't need the client to see.
 
 Server-side `Looksie` would have access to everything _except_ `tieIntoDOM()`, which would only be declared in the client-side source.
 
