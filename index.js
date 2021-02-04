@@ -14,7 +14,6 @@ function promitate(mod) {
 }
 fs.p = promitate(fs)
 
-//console.log('Parity be what', typeof ParityObject)
 class ParityObject {
 	
 	constructor(url) {
@@ -111,15 +110,10 @@ class ParityObject {
 			let source = await fs.p.readFile(
 				path.resolve(__dirname,this.clientSourcePath))
 			
-			// Determine file prefixes based on presence of certain variable names.
-			
-			// NOTE: Let's try this as an anti-hack.
-			// HACK: It's a hack.  If I want to do this, there needs to be some kind
-			//   of globally accessible var listing out all the replace-able strings.
+			// Determine file prefixes based on presence of certain $variable$ names.
 			let r,x = ParityObject._classRegex['methods']
 			let prefixes=[], added=new Set()
 			for (let m of new String(source).matchAll(x)) {
-				// Prefix the source file with... jank.
 				if (added.has(m[1]))
 					continue
 				let s = `\$${m[1]}_methods\$`,
