@@ -19,7 +19,7 @@ It would be especially nice if it could be used from the client/browser as easil
 
 And that exact thing... is what this module exists for.
 
-## here's an example
+## a little elaboration
 
 Assume `Looksie` is a class extending `ParityObject`, that interacts with some database.
 
@@ -41,6 +41,46 @@ Client-side `Looksie` would have access to...
 Server-side `Looksie` would have access to everything _except_ `tieIntoDOM()`, which would only be declared in the client-side source.
 
 Browsers would obviously need the client-side object.  But any node application using `Looksie` would need only the server-side object.
+
+## an actual example
+
+Server-side `ValueSayer` object, likely in its own module.
+```javascript
+class ValueSayer extends ParityObject {
+  constructor(value,...r) {
+    super(...r)
+    super.setClientSourcePath('client.valuesayer.js')
+    this.value = value
+  }
+  getClientMethods() {
+    return ['sayit']
+  }
+  asynch sayit(prefix) {
+    return {
+      value:`${prefix && prefix+' ' || ''}${this.value}`
+    }
+  }
+}
+```
+Client-side `ValueSayer` object in `client.valuesayer.js` or somesuch.
+```javascript
+class ValueSayer extends ParityObject {
+  constructor(url,methods) {
+    super(url, $ValueSayer_methods$.concat(methods))
+  }
+}
+```
+Initializing on the server, it'd look like...
+```javascript
+let sayer = new ValueSayer('stupendosity!','/sayer/1')
+```
+Running this from the browser would look something like...
+```javascript
+let sayer = new ValueSayer('/sayer/1')
+let value = await sayer.sayit('I demand')
+console.log(value)
+// ^ This will output, "I demand stupendosity!"
+```
 
 ## addendum
 
