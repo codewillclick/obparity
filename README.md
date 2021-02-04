@@ -66,7 +66,8 @@ Client-side `ValueSayer` object in `client.valuesayer.js` or somesuch.
 ```javascript
 class ValueSayer extends ParityObject {
   constructor(url,methods) {
-    super(url, $ValueSayer_methods$.concat(methods))
+    // ParityObject() returns a Proxy, so be sure to return super()'s result
+    return super(url, $ValueSayer_methods$.concat(methods))
   }
 }
 ```
