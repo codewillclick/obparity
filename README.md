@@ -81,7 +81,7 @@ let value = await sayer.sayit('I demand')
 console.log(value)
 // ^ This will output, {value:"I demand stupendosity!"}
 ```
-Note that this will output `{value:"I demand stupendosity!"}` on both the client _and_ server.
+Note that `await sayer.sayit('I demand')` will return `{value:"I demand stupendosity!"}` on both the client _and_ server.
 
 That behavior for identically called methods in both locations is identical... is a _premise_, and must be maintained for extending classes to uphold the philosphy behind the `obparity` module.
 
