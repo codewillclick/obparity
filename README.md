@@ -79,7 +79,7 @@ Running this from the browser would look something like...
 let sayer = new ValueSayer('/sayer/1')
 let value = await sayer.sayit('I demand')
 console.log(value)
-// ^ This will output, "I demand stupendosity!"
+// ^ This will output, {value:"I demand stupendosity!"}
 ```
 
 ## addendum
