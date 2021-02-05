@@ -16,7 +16,7 @@ fs.p = promitate(fs)
 
 class ParityObject {
 	
-	constructor(url) {
+	constructor(url,methods) {
 		// Some overhead...
 		this._constructorUpdate()
 		
@@ -30,15 +30,19 @@ class ParityObject {
 		// handleClientRequest(res.body).
 		this.fetchUrl = null
 		this.setClientFetchUrl(url)
+
+		this._clientMethods = methods || []
 	}
 	
 	// Private methods meant to be run internally.
 	
 	_constructorUpdate() {
 		// Store top-level class names in a table for various computations.
-		if (!ParityObject._classNames.has(this.constructor.name)) {
+		const name = this.constructor.name
+		if (name &&
+				!ParityObject._classNames.has(name)) {
 			// Add class name to this table.
-			ParityObject._classNames.add(this.constructor.name)
+			ParityObject._classNames.add(name)
 			// Recompute the regex used to check for 
 			this._regexReplaceRecompute(
 				ParityObject._classRegex,
@@ -52,7 +56,7 @@ class ParityObject {
 			//   Either way, a static table of something that is returned with a class
 			//   method implementation is wholly inelegant.  But for now it works!
 			//   I'll leave it for a refactor.
-			ParityObject._methodTable[this.constructor.name] = this.getClientMethods()
+			ParityObject._methodTable[name] = this.getClientMethods()
 			console.log('methodTable',ParityObject._methodTable)
 		}
 	}
@@ -79,7 +83,8 @@ class ParityObject {
 	}
 	
 	getClientMethods() {
-		return ['ping','debug']
+		let r = this._clientMethods || []
+		return ['ping','debug'].concat(r)
 	}
 	
 	// Methods interacting with the client-side object.
@@ -107,8 +112,13 @@ class ParityObject {
 			//   directory.  For example, a separate parity object module extending
 			//   ParityObject.  Will it reference __dirname from its own location?
 			//   Or will it reference obparity's directory?
-			let source = await fs.p.readFile(
-				path.resolve(__dirname,this.clientSourcePath))
+			let source
+			if (path.isAbsolute(this.clientSourcePath)) {
+				source = await fs.p.readFile(this.clientSourcePath)
+			} else {
+				source = await fs.p.readFile(
+					path.resolve(__dirname,this.clientSourcePath))
+			}
 			
 			// Determine file prefixes based on presence of certain $variable$ names.
 			let r,x = ParityObject._classRegex['methods']
