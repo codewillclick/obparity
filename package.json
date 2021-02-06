@@ -1,6 +1,6 @@
 {
   "name": "obparity",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "object sharing instance on cleint and server alike",
   "main": "index.js",
   "scripts": {
