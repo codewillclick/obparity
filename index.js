@@ -58,7 +58,7 @@ class ParityObject {
 		if (param.insertMethods) {
 			// Insert parent static methods object into client-side class.
 			let ms = `static methods = ${JSON.stringify(this.getClientMethods())};`
-			cs.replace(/^([^{]+{)/, '$1 '+ms)
+			cs = cs.replace(/^([^{]+{)/, '$1 '+ms)
 		}
 		return cs
 	}
