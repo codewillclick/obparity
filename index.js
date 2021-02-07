@@ -5,7 +5,7 @@ class ParityObject {
 	static methods = ['ping']
 	
 	constructor(url) {
-		this.fetchUrl = url
+		Object.defineProperty(this,'fetchUrl',{ get:() => url })
 	}
 	
 	// Server-side methods
@@ -67,6 +67,9 @@ class ParityObject {
 	// one of the server-side client methods.
 	async handleClientRequest(ob) {
 		if (ob.type === 'call') {
+			if (!this.constructor.methods.includes(ob.method))
+				throw new Error(
+					`(${ob.method}) is not a ${this.constructor.name}.methods value`)
 			let f = this[ob.method]
 			let r = ob.args
 			if (typeof f !== 'function')
