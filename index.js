@@ -123,13 +123,6 @@ class ParityObject {
 					let a
 					return (a=Reflect.get(target,prop))   ||
 						(this.methods.has(prop) && f(prop)) || a
-
-					if (a=Reflect.get(target,prop))
-						return a
-					else if (this.methods.has(prop))
-						return f(prop)
-					else
-						return a
 				}).bind(this)
 			})
 		}
