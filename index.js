@@ -47,13 +47,26 @@ class ParityObject {
 	}
 	
 	// Get the source of the client-side class.
-	async clientSource() {
-		return this.constructor.getClientSource()
+	async clientSource(param) {
+		return this.constructor.getClientSource(param)
 	}
-	static async getClientSource() {
+	static async getClientSource(param) {
+		param = Object.assign({ // a few config defaults...
+			forceName:false,
+			insertMethods:true
+		},param)
 		let cs = this.getClientClass().toString()
-		let ms = `static methods = ${JSON.stringify(this.getClientMethods())};`
-		return cs.replace(/^([^{]+{)/, '$1 '+ms)
+		if (param.forceName) {
+			// Force name to match server-side class'.
+			let s = this.toString().replace(/{.*/,'')
+			cs = cs.replace(/^([^{]+)/,s)
+		}
+		if (param.insertMethods) {
+			// Insert parent static methods object into client-side class.
+			let ms = `static methods = ${JSON.stringify(this.getClientMethods())};`
+			cs.replace(/^([^{]+{)/, '$1 '+ms)
+		}
+		return cs
 	}
 	
 	// Process incoming request object.  Will typically default to a call against
