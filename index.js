@@ -5,14 +5,7 @@ let fs = require('fs')
 let path = require('path')
 let util = require('util')
 
-function promitate(mod) {
-	let a = {}
-	for (var k in mod)
-		if (typeof mod[k] === 'function')
-			a[k] = util.promisify(mod[k])
-	return a
-}
-fs.p = promitate(fs)
+fs.p = fs.promises
 
 class ParityObject {
 	static methods = ['ping']
@@ -98,7 +91,7 @@ class ParityObject {
 			this.methods = new Set(this.constructor.methods)
 			this.fetchUrl = url
 			let self = this
-
+			
 			// This will be used multiple times.
 			let f = (prop) => async function() {
 				let x = await fetch(self.fetchUrl,{
@@ -128,12 +121,15 @@ class ParityObject {
 				get:((target,prop,receiver) => {
 					// Prioritizes own set properties.
 					let a
+					return (a=Reflect.get(target,prop))   ||
+						(this.methods.has(prop) && f(prop)) || a
+
 					if (a=Reflect.get(target,prop))
 						return a
 					else if (this.methods.has(prop))
 						return f(prop)
 					else
-						return Reflect.get(this,...arguments)
+						return a
 				}).bind(this)
 			})
 		}
@@ -142,6 +138,8 @@ class ParityObject {
 }
 M.ParityObject = ParityObject
 
+// NOTE: Right now, this only exists for testing purposes... so figure out what
+//   to do with it later.
 class P2 extends ParityObject {
 	static methods = ['pong']
 	constructor(url) {
@@ -163,6 +161,7 @@ M.P2 = P2
 // them such that no conflicts arise browser-side.
 async function compileSource(...r) {
 	function * chain(c) {
+		// Iterate as we climb up the parent class tree... or limb?
 		let old=null, a = c
 		while (a && a.name && a.name !== 'Function') {
 			yield [a,old]
@@ -170,21 +169,40 @@ async function compileSource(...r) {
 			a = Object.getPrototypeOf(a)
 		}
 	}
-	let t = {}
+	let t = {} // keep track of number of references
+	let edges = {} // parentage table
 	r.map(a => {
 		if (!a.getClientSource)
+			// Can't provide source, so skip.
 			return
 		for (let [c,old] of chain(a)) {
+			if (c && old) {
+				// Add an edge to the parentage table, pointing to the parent.
+				if (!edges[old.name])
+					edges[old.name] = new Set()
+				edges[old.name].add(c.name)
+			}
+			// Increment the reference count.
 			if (!t[c.name])
 				t[c.name] = [0,c]
 			t[c.name][0] += 1
 		}
 	})
+	// Comparator abides the edges in the parentage table.
+	let comp = (a,b) =>
+		edges[a] && edges[a].has(b) ?
+			-1 :
+			edges[b] && edges[b].has(a) ?
+				1 : 0
 	// This is a function order as far as dependencies go, but it doesn't group
 	// related classes together.  ...  Oh well, a problem for a later time.
-	let xr = await Promise.all(Object.values(t).sort((a,b) => b[0] - a[0])
+	let xr = await Promise.all(Object.values(t).sort((a,b) =>
+		// sort first by number of times referenced, then by the parentage table
+		a[0]-b[0] ? a[0]-b[0] : comp(a.name,b.name))
+		// map to the client source...
 		.map(r => r[1].getClientSource()))
-	return xr.join('\n;\n')
+	// Reverse for good measure!
+	return xr.reverse().join('\n;\n')
 }
 M.compileSource = compileSource
 
