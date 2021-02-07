@@ -44,6 +44,8 @@ Browsers would obviously need the client-side object.  But any node application 
 
 ## an actual example
 
+# BEWARE: v1.1.0 contains a refactor that removes the need for a separate client-side js file.  Need to update this example.
+
 Server-side `ValueSayer` object, likely in its own module.
 ```javascript
 class ValueSayer extends ParityObject {
