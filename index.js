@@ -1,12 +1,6 @@
 
 (async (M) => {
 
-let fs = require('fs')
-let path = require('path')
-let util = require('util')
-
-fs.p = fs.promises
-
 class ParityObject {
 	static methods = ['ping']
 	
