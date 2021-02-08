@@ -4,7 +4,9 @@
 let _uid = 1
 function uid(pre) {
 	pre = pre || ''
-	return  `${pre}${_uid++}_${Math.floor(Math.random() * (1<<30))}`
+	let s = `${pre}${_uid++}_${Math.floor(Math.random() * (1<<30))}`
+	//console.log('creating uid',s)
+	return s
 }
 
 class ParityObject {
@@ -12,10 +14,11 @@ class ParityObject {
 	static sourceClassId = null
 	
 	constructor(url) {
-		// WARNING: The method requiring this is static, and may be called before an
-		//   instance of this class is initialized, leaving sourceClassId blank.
+		// Set a static class id... if needed.
 		this._staticSourceIdCheck()
-		let id = uid()
+		// Set an instance id.
+		let id = uid('pob_')
+		// Effectively make these values private.
 		Object.defineProperties(this, {
 			fetchUrl: { get:() => url },
 			parityId: { get:() => id }
@@ -25,11 +28,17 @@ class ParityObject {
 	// Internal methods
 
 	_staticSourceIdCheck() {
+		// WARNING: The method requiring this is static, and may be called before an
+		//   instance of this class is initialized, leaving sourceClassId blank.
 		if (!this.constructor.sourceClassId ||
 				(this.constructor.sourceClassId ===
 					Object.getPrototypeOf(this.constructor).sourceClassId)) {
 			// Only write a new class id on new class definition.
 			this.constructor.sourceClassId = uid('scid_')
+			// Override this method once it calls...  It should add to the topmost
+			// prototype, leaving the original alone.
+			// TODO: Need a test for this.
+			this._staticSourceIdCheck = () => {}
 		}
 	}
 	
@@ -271,6 +280,156 @@ async function compileSource(r,param) {
 }
 M.compileSource = compileSource
 
+class Manager {
+	constructor(param) {
+		this.templates = {}
+		this.paired = {}
+		this.unpaired = {}
+		this.addressed = {}
+		this.matchPatterns = this._initPatterns(param && param.patterns || [])
+		// Default to true on this one.
+		this.createOnEmpty = param && (param.createOnEmpty ? true : false) || true
+		// There should be buckets of unpaired pobs, to be picked from when a new
+		// pair() request comes in.
+		// 
+		// ... But how should they be divided?  I guess... by classId?
+		// This presents a problem when the server goes down but the client doesn't.
+		// All the old classIds are active client-side but the server says "nope".
+	}
+	
+	_initPatterns(r) {
+		return r.map(s => new RegExp(s))
+	}
+
+	_urlPatternMatch(url) {
+		for (let x of this.matchPatterns) {
+			let m = url.match(x)
+			if (m)
+				return m.toString()
+		}
+		return null
+	}
+	
+	accept(pob) {
+		// In case the pob wasn't created with the Manager, add it in like this.
+		let stack = this.unpaired[pob.constructor.sourceClassId]
+		if (!stack)
+			stack = this.unpaired[pob.constructor.sourceClassId] = []
+		// Push it into the appropriate stack and... I guess that's it.
+		stack.push(pob)
+		return this
+	}
+	acceptMatch(pob) {
+		// This is for objects intended to be matched with their incoming urls.
+		let k = this._urlPatternMatch(pob.fetchUrl)
+		if (!k)
+			throw new Error(`no patterns match for url (${pob.fetchUrl})`)
+		let bucket = this.addressed[k]
+		if (!bucket)
+			this.addressed[k] = []
+		// Just stuff it in this bucket.
+		this.addressed[k].push(pob)
+		return this
+	}
+
+	addTemplate(k,params) {
+		// params is a list of arguments.  The first is the class to call 'new' on,
+		// whereas the rest are to be passed in as *its* arguments on create().
+		this.templates[k] = params
+		return this
+	}
+	create(k,match) {
+		let p = this.templates[k]
+		console.log('creating',p[0],p.slice(1))
+		let pob = new p[0](...p.slice(1))
+		match && this.acceptMatch(pob) || this.accept(pob)
+		return pob
+	}
+	
+	async evaluate(url,ob) {
+		console.log('evaluating',url,ob)
+		console.log('against', {
+			paired:this.paired,
+			unpaired:this.unpaired,
+			addressed:this.addressed
+		})
+		// First, check if it's a pair() request.
+		if (ob.id === null && ob.method === 'pair') {
+			let pob
+			console.log('new pair!',url,ob)
+			// Pull a pob out of the appropriate unpaired bucket.
+			let stack = this.unpaired[ob.classId]
+			console.log('picking stack',stack)
+			if (!stack || !stack.length) {
+				if (this.createOnEmpty && ob.args[0] && ob.args[0].template) {
+					pob = this.create(
+						ob.args[0].template,
+						ob.args[0].match) // TODO: What about 'match'?
+					stack = this.unpaired[ob.classId]
+					console.log('created a new guy!',pob,pob.fetchUrl,pob.parityId)
+				}
+				else
+					throw new Error(`no pobs of class id (${ob.classId}) available`)
+			}
+			else {
+				console.log('stack',stack)
+				pob = stack[stack.length-1]
+			}
+			// Handle the pair() method normally, by passing it along here.
+			let a = await pob.handleClientRequest(ob)
+			console.log('a',a,'requst result')
+			if (!a)
+				throw new Error('pairing failed')
+			// And put the pob into the paired table!
+			if (this.paired[pob.parityId])
+				throw new Error(`duplicate id! (${pob.parityId})`)
+			this.paired[pob.parityId] = pob
+			if (stack && stack.length) {
+				let b = stack.pop() // pop here once transaction was a success
+				console.log('pop out of stack',b.parityId)
+			}
+			console.log('this.paired',Object.keys(this.paired),a)
+			console.log('now against', {
+				paired:this.paired,
+				unpaired:this.unpaired,
+				addressed:this.addressed
+			})
+			return a
+		}
+
+		// If id's null, but it's *not* a pair request, try to match by url.
+		else if (ob.id === null) {
+			if (!url)
+				throw new Error('no matching mechanism available for Manager!')
+			let k = this._urlPatternMatch(url)
+			if (!k)
+				throw new Error(`no matching pattern for url (${url})`)
+			// Can't select a specific one without an id, and given the lack of pair()
+			// attempt, we can assume an id isn't being sought.  So let's just grab
+			// whatever's on hand.
+			let bucket = this.addressed[k]
+			if (!bucket || !bucket.length)
+				throw new Error(`bucket for pattern (${k}) is empty`)
+			// Just use the first one sitting there.
+			// NOTE: I'll leave it like this for now in case I choose some further
+			//   sorting method for these buckets later.  Otherwise, it doesn't
+			//   matter how large this bucket is; it'll only ever return one value.
+			//   ... Let's at least make it return the latest thing added.
+			let pob = bucket[bucket.length-1]
+			return pob.handleClientRequest(pob)
+		}
+
+		// Otherwise, just find the matching pob and process normally.
+		else {
+			let {id,classId,method} = ob
+			let pob = this.paired[id]
+			if (!pob)
+				throw new Error(`id expected but not present (${id})`)
+			return pob.handleClientRequest(ob)
+		}
+	}
+}
+M.Manager = Manager
 
 })(exports)
 
