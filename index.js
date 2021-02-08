@@ -335,10 +335,9 @@ class Manager {
 		let pr = Object.values(this.paired).map(a => a.constructor)
 		let ur = Array.from(chain(Object.values(this.unpaired)))
 		         .map(a => a.constructor)
-		let ar = Array.from(chain(Object.values(this.addressed))).map(a => a.constructor)
-		console.log('these',{
-			tr:tr, pr:pr, ur:ur, ar:ar
-		})
+		let ar = Array.from(chain(Object.values(this.addressed)))
+		         .map(a => a.constructor)
+		//console.log('these',{ tr:tr, pr:pr, ur:ur, ar:ar })
 		let r = Array.from(new Set(chain([tr,pr,ur,ar])))
 		// NOTE: Module reference.
 		return M.compileSource(r,param)
