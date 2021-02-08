@@ -310,6 +310,16 @@ class Manager {
 		return null
 	}
 	
+	// NOTE: Should I not put this somewhere, I dunno... special?
+	//   I mean, it's way too short to be its own module...
+	express() {
+		// ASSUMES: app.post()
+		return async (req,res) => {
+			let a = await this.evaluate(req.url,req.body)
+			a && res.send(JSON.stringify(a)) || res.sendStatus(500)
+		}
+	}
+	
 	accept(pob) {
 		// In case the pob wasn't created with the Manager, add it in like this.
 		let stack = this.unpaired[pob.constructor.sourceClassId]
@@ -336,6 +346,11 @@ class Manager {
 		// params is a list of arguments.  The first is the class to call 'new' on,
 		// whereas the rest are to be passed in as *its* arguments on create().
 		this.templates[k] = params
+		return this
+	}
+	addTemplates(ob) {
+		for (var k in ob)
+			this.addTemplate(k,ob[k])
 		return this
 	}
 	create(k,match) {
