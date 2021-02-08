@@ -2,20 +2,35 @@
 (async (M) => {
 
 let _uid = 1
-function uid() {
-	return  `${_uid++}_${Math.floor(Math.random() * ((1<<32)-1))}`
+function uid(pre) {
+	pre = pre || ''
+	return  `${pre}${_uid++}_${Math.floor(Math.random() * (1<<30))}`
 }
 
 class ParityObject {
 	static methods = ['pair','ping']
+	static sourceClassId = null
 	
 	constructor(url) {
+		// WARNING: The method requiring this is static, and may be called before an
+		//   instance of this class is initialized, leaving sourceClassId blank.
+		this._staticSourceIdCheck()
 		let id = uid()
 		Object.defineProperties(this, {
 			fetchUrl: { get:() => url },
-			parityId: { get:() => id },
-			pair: { value:() => { return {url:url, id:id} } }
+			parityId: { get:() => id }
 		})
+	}
+
+	// Internal methods
+
+	_staticSourceIdCheck() {
+		if (!this.constructor.sourceClassId ||
+				(this.constructor.sourceClassId ===
+					Object.getPrototypeOf(this.constructor).sourceClassId)) {
+			// Only write a new class id on new class definition.
+			this.constructor.sourceClassId = uid('scid_')
+		}
 	}
 	
 	// Server-side methods
@@ -55,9 +70,15 @@ class ParityObject {
 		return this.constructor.getClientSource(param)
 	}
 	static async getClientSource(param) {
+		function addStatic(s,key,val) {
+			let ms = `\nstatic ${key} = ${val};`
+			return s.replace(/^([^{]+{)/, '$1 '+ms)
+		}
 		param = Object.assign({ // a few config defaults...
 			forceName:true,
-			insertMethods:true
+			insertMethods:true,
+			url:null,
+			vars:{}
 		},param)
 		let cs = this.getClientClass().toString()
 		if (param.forceName) {
@@ -67,8 +88,23 @@ class ParityObject {
 		}
 		if (param.insertMethods) {
 			// Insert parent static methods object into client-side class.
-			let ms = `static methods = ${JSON.stringify(this.getClientMethods())};`
-			cs = cs.replace(/^([^{]+{)/, '$1 '+ms)
+			cs = addStatic(cs,'methods',JSON.stringify(this.getClientMethods()))
+		}
+		if (param.url) {
+			// Insert default url for class... useful when connecting to a master
+			// server object that then pairs client object with a specific server
+			// object instance.
+			cs = addStatic(cs,'defaultUrl',`"${param.url}"`)
+		}
+		if (true) {
+			// Forcefully set this one, I guess.
+			// UNCERTAIN: But what'll happen when an overriding method doesn't include
+			//   this variable?  Hmm... we'll have to experiment.
+			cs = addStatic(cs,'sourceClassId',`"${this.sourceClassId}"`)
+		}
+		for (var k in param.vars) {
+			// Add in arbitrary static vars for the class.
+			cs = addStatic(cs,k,param.vars[k])
 		}
 		return cs
 	}
@@ -104,29 +140,41 @@ class ParityObject {
 		}
 	}
 	
+	async pair(auth) {
+		return {url:this.fetchUrl, id:this.parityId}
+	}
+	
 	// Client-side class.
 	
 	static _ = class ParityObject {
+		static _classUidCounter = 1
+
 		constructor(url) {
+			// For faster .has() access, make a Set out of this one.
 			this.methods = new Set(this.constructor.methods)
+			// This id and url are set during pair(), if not through constructor args.
 			this.parityId = null
-			this.fetchUrl = url
+			this.fetchUrl = url || this.constructor.defaultUrl || null
+			// And a little helper for sidestepping encapsulation confusion.
 			let self = this
 			
+			let px // for reference to the returned proxy
 			let paired = false
 			// Meant to synchronize client-side object, though not strictly necessary
-			// if the url is provided through the constructor.
+			// if the url is provided through the constructor.  *Could* become vitally
+			// important once authorization and such is thrown into the mix.
 			this.pair = async (auth) => {
 				let a = await this.proxy.pair(auth) // I guess... think about auth later?
 				if (!a)
 					throw new Error('pairing failed completely')
 				if (!a.err) { // reserve .err as a property for server's pair()
 					this.parityId = a.id
-					this.fetchUrl = url
+					this.fetchUrl = a.url
 					paired = true
 				}
 				else
 					throw new Error(`pairing failed with error (${a.err})`)
+				return px // remember to return the *proxy*
 			}
 			// Read-only paired property.
 			Object.defineProperty(this,'paired',{ get:() => paired })
@@ -140,7 +188,8 @@ class ParityObject {
 						type:'call',
 						method:prop,
 						args:[...arguments],
-						id:this.parityId
+						id:self.parityId,
+						classId:self.constructor.sourceClassId || null
 					})
 				})
 				return x.json()
@@ -157,7 +206,7 @@ class ParityObject {
 				}).bind(this)
 			})
 			
-			return new Proxy(this,{
+			return px = new Proxy(this,{
 				get:((target,prop,receiver) => {
 					// Prioritizes own set properties.
 					let a
@@ -170,28 +219,10 @@ class ParityObject {
 }
 M.ParityObject = ParityObject
 
-// NOTE: Right now, this only exists for testing purposes... so figure out what
-//   to do with it later.
-class P2 extends ParityObject {
-	static methods = ['pong']
-	constructor(url) {
-		super(url)
-	}
-	async pong() {
-		return { msg:'ponged that bad boi' }
-	}
-	static _ = class P2 extends ParityObject {
-		constructor(url) {
-			super(url)
-		}
-	}
-}
-M.P2 = P2
-
 // This takes a set of provided ParityObject class objects and works out which
 // client class sources are needed for the lot of them to work.  Then it orders
 // them such that no conflicts arise browser-side.
-async function compileSource(...r) {
+async function compileSource(r,param) {
 	function * chain(c) {
 		// Iterate as we climb up the parent class tree... or limb?
 		let old=null, a = c
@@ -201,6 +232,8 @@ async function compileSource(...r) {
 			a = Object.getPrototypeOf(a)
 		}
 	}
+	// UNCERTAIN: Can I really just assume an Array?  What if it's an iterable?
+	r = Array.isArray(r) ? r : [r]
 	let t = {} // keep track of number of references
 	let edges = {} // parentage table
 	r.map(a => {
@@ -232,7 +265,7 @@ async function compileSource(...r) {
 		// sort first by number of times referenced, then by the parentage table
 		a[0]-b[0] ? a[0]-b[0] : comp(a.name,b.name))
 		// map to the client source...
-		.map(r => r[1].getClientSource()))
+		.map(r => r[1].getClientSource(param)))
 	// Reverse for good measure!
 	return xr.reverse().join('\n;\n')
 }
