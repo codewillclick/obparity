@@ -314,10 +314,34 @@ class Manager {
 	//   I mean, it's way too short to be its own module...
 	express() {
 		// ASSUMES: app.post()
-		return async (req,res) => {
+		return async (req,res,next) => {
 			let a = await this.evaluate(req.url,req.body)
 			a && res.send(JSON.stringify(a)) || res.sendStatus(500)
 		}
+	}
+	expressSource(param) {
+		let self = this
+		// TODO: Throw the compiled source in another middleware func.
+		return async (req,res,next) => {
+			let s = await self.compileSource(param)
+			res.set({ 'content-type':'application/javascript' })
+			res.send(s)
+		}
+	}
+
+	async compileSource(param) {
+		let chain = function * (r) { for (let a of r) for (let b of a) yield b }
+		let tr = Object.values(this.templates).map(r => r[0])
+		let pr = Object.values(this.paired).map(a => a.constructor)
+		let ur = Array.from(chain(Object.values(this.unpaired)))
+		         .map(a => a.constructor)
+		let ar = Array.from(chain(Object.values(this.addressed))).map(a => a.constructor)
+		console.log('these',{
+			tr:tr, pr:pr, ur:ur, ar:ar
+		})
+		let r = Array.from(new Set(chain([tr,pr,ur,ar])))
+		// NOTE: Module reference.
+		return M.compileSource(r,param)
 	}
 	
 	accept(pob) {
