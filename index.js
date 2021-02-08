@@ -1,11 +1,21 @@
 
 (async (M) => {
 
+let _uid = 1
+function uid() {
+	return  `${_uid++}_${Math.floor(Math.random() * ((1<<32)-1))}`
+}
+
 class ParityObject {
-	static methods = ['ping']
+	static methods = ['pair','ping']
 	
 	constructor(url) {
-		Object.defineProperty(this,'fetchUrl',{ get:() => url })
+		let id = uid()
+		Object.defineProperties(this, {
+			fetchUrl: { get:() => url },
+			parityId: { get:() => id },
+			pair: { value:() => { return {url:url, id:id} } }
+		})
 	}
 	
 	// Server-side methods
@@ -46,13 +56,13 @@ class ParityObject {
 	}
 	static async getClientSource(param) {
 		param = Object.assign({ // a few config defaults...
-			forceName:false,
+			forceName:true,
 			insertMethods:true
 		},param)
 		let cs = this.getClientClass().toString()
 		if (param.forceName) {
 			// Force name to match server-side class'.
-			let s = this.toString().replace(/{.*/,'')
+			let s = this.toString().split('{',1)[0]
 			cs = cs.replace(/^([^{]+)/,s)
 		}
 		if (param.insertMethods) {
@@ -99,8 +109,27 @@ class ParityObject {
 	static _ = class ParityObject {
 		constructor(url) {
 			this.methods = new Set(this.constructor.methods)
+			this.parityId = null
 			this.fetchUrl = url
 			let self = this
+			
+			let paired = false
+			// Meant to synchronize client-side object, though not strictly necessary
+			// if the url is provided through the constructor.
+			this.pair = async (auth) => {
+				let a = await this.proxy.pair(auth) // I guess... think about auth later?
+				if (!a)
+					throw new Error('pairing failed completely')
+				if (!a.err) { // reserve .err as a property for server's pair()
+					this.parityId = a.id
+					this.fetchUrl = url
+					paired = true
+				}
+				else
+					throw new Error(`pairing failed with error (${a.err})`)
+			}
+			// Read-only paired property.
+			Object.defineProperty(this,'paired',{ get:() => paired })
 			
 			// This will be used multiple times.
 			let f = (prop) => async function() {
@@ -110,7 +139,8 @@ class ParityObject {
 					body:JSON.stringify({
 						type:'call',
 						method:prop,
-						args:[...arguments]
+						args:[...arguments],
+						id:this.parityId
 					})
 				})
 				return x.json()
@@ -137,7 +167,6 @@ class ParityObject {
 			})
 		}
 	}
-	
 }
 M.ParityObject = ParityObject
 
