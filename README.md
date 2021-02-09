@@ -80,7 +80,7 @@ The server app might contain something like...
 let sayer = new ValueSayer('stupendosity!','/sayer/1')
 
 app.post('/sayer/1', async (req,res) => {
-  res.send(JSON.stringify(sayer.handleClientRequest(req.body)))
+  res.send(JSON.stringify(await sayer.handleClientRequest(req.body)))
 })
 ...
 ```
