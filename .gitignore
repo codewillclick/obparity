@@ -1,4 +1,11 @@
 
+; vim temp edit files
 *.sw?
+
+; various local dev scripts
+*.sh
 *.bat
+
+; vim session file
+session
 

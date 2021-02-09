@@ -70,6 +70,8 @@ class ParityObject {
 			A = B
 			i++
 		}
+		if (i === 1000)
+			throw new Error('getClientMethods() reached loop maximum')
 		r = r.reduce((a,b) => b.methods.map(c => a.add(c)) && a,new Set())
 		return Array.from(r)
 	}
@@ -210,17 +212,17 @@ class ParityObject {
 				get:((target,prop,receiver) => {
 					if (this.methods.has(prop))
 						return f(prop)
-					else
-						return Reflect.get(this,...arguments)
+					// UNCERTAIN: I wrote it like this orignally, but wait... what?
+					//   Unit test!  When all else fails, write a unit test for it.
+					return Reflect.get(this,...arguments)
 				}).bind(this)
 			})
 			
 			return px = new Proxy(this,{
 				get:((target,prop,receiver) => {
-					// Prioritizes own set properties.
-					let a
-					return (a=Reflect.get(target,prop))   ||
-						(this.methods.has(prop) && f(prop)) || a
+					if (Reflect.has(target,prop))
+						return Reflect.get(target,prop)
+					return this.methods.has(prop) && f(prop) || undefined
 				}).bind(this)
 			})
 		}
@@ -385,6 +387,9 @@ class Manager {
 	}
 	
 	async evaluate(url,ob) {
+		// NOTE: I'm trying to set it up so an object is referenced in only one
+		//   location at a time, but if multiple keys need to be able to access the
+		//   same object, that's going to be a little difficult.
 		console.log('evaluating',url,ob)
 		console.log('against', {
 			paired:this.paired,
@@ -393,6 +398,12 @@ class Manager {
 		})
 		// First, check if it's a pair() request.
 		if (ob.id === null && ob.method === 'pair') {
+			// TODO: Include ability to supply a unique key of one's own, which will
+			//   automatically remove any managed objects with that key... somehow
+			//   referencing them.  But... where is said key attached?
+			//     . Should the Manager attach some new property to all managed
+			//       objects, and keep a table on hand that can pick them out of their
+			//       respective buckets?
 			let pob
 			console.log('new pair!',url,ob)
 			// Pull a pob out of the appropriate unpaired bucket.
@@ -402,7 +413,7 @@ class Manager {
 				if (this.createOnEmpty && ob.args[0] && ob.args[0].template) {
 					pob = this.create(
 						ob.args[0].template,
-						ob.args[0].match) // TODO: What about 'match'?
+						ob.args[0].match)
 					stack = this.unpaired[ob.classId]
 					console.log('created a new guy!',pob,pob.fetchUrl,pob.parityId)
 				}
