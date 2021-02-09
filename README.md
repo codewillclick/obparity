@@ -68,9 +68,9 @@ class ValueSayer extends ParityObject {
   
   // And here's the client-side class, itself, as a static property.
   static _ = class extends ParityObject {
-    constructor(url,methods) {
+    constructor(url) {
       // ParityObject() returns a Proxy, so be sure to return super()'s result
-      return super(url, $ValueSayer_methods$.concat(methods))
+      return super(url)
     }
   }
 }
