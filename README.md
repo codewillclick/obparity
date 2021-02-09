@@ -44,32 +44,30 @@ Browsers would obviously need the client-side object.  But any node application 
 
 ## an actual example
 
-# BEWARE: v1.1.0 contains a refactor that removes the need for a separate client-side js file.  Need to update this example.
-
 Server-side `ValueSayer` object, likely in its own module.
 ```javascript
 class ValueSayer extends ParityObject {
+  // Necessary static methods array for methods client-side object will use.
+  static methods = ['sayit']
+  
   constructor(value,...r) {
     super(...r)
-    super.setClientSourcePath('client.valuesayer.js')
     this.value = value
   }
-  getClientMethods() {
-    return ['sayit']
-  }
+  
+  // This will be called via the client-side object's proxy reference.
   async sayit(prefix) {
     return {
       value:`${prefix && prefix+' ' || ''}${this.value}`
     }
   }
-}
-```
-Client-side `ValueSayer` object in `client.valuesayer.js` or somesuch.
-```javascript
-class ValueSayer extends ParityObject {
-  constructor(url,methods) {
-    // ParityObject() returns a Proxy, so be sure to return super()'s result
-    return super(url, $ValueSayer_methods$.concat(methods))
+  
+  // And here's the client-side class, itself, as a static property.
+  static _ = class extends ParityObject {
+    constructor(url,methods) {
+      // ParityObject() returns a Proxy, so be sure to return super()'s result
+      return super(url, $ValueSayer_methods$.concat(methods))
+    }
   }
 }
 ```
@@ -88,11 +86,8 @@ Note that `await sayer.sayit('I demand')` will return `{value:"I demand stupendo
 
 That behavior for identically called methods in both locations is identical... is a _premise_, and must be maintained for extending classes to uphold the philosphy behind the `obparity` module.
 
-## addendum
+Next is an example using a `Manager` class.
 
-I was originally trying to think of a way the server-side object could render the client-side object from its own source, serializing its methods on the way down and deserializing in the browser, but...
-
-For now, having a separate `client.js` is sufficient.  All the logic to handle when or how `getClientSource()` and `handleClientRequest()` are called is left to the server-side application requiring this module.
 
 ## changelog
 
