@@ -44,8 +44,11 @@ Browsers would obviously need the client-side object.  But any node application 
 
 ## an actual example
 
+Assuming v1.2.0+...
 Server-side `ValueSayer` object, likely in its own module.
 ```javascript
+let {ParityObject} = require('obparity')
+
 class ValueSayer extends ParityObject {
   // Necessary static methods array for methods client-side object will use.
   static methods = ['sayit']
@@ -71,9 +74,15 @@ class ValueSayer extends ParityObject {
   }
 }
 ```
-Initializing on the server, it'd look like...
+The server app might contain something like...
 ```javascript
+...
 let sayer = new ValueSayer('stupendosity!','/sayer/1')
+
+app.post('/sayer/1', async (req,res) => {
+  res.send(JSON.stringify(sayer.handleClientRequest(req.body)))
+})
+...
 ```
 Running this from the browser would look something like...
 ```javascript
