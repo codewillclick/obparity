@@ -126,7 +126,7 @@ Current
     * ParityObjects are initialized with manual url entry
   * module
     * ParityObject
-    * **NEW: `compileSource
+    * **NEW: `compileSource`**
 
 Upcoming
 * v1.2.0
