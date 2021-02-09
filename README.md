@@ -57,9 +57,8 @@ class ValueSayer extends ParityObject {
   static methods = ['sayit']
   
   constructor(value,...r) {
-    let self = super(...r)
-    self.value = value
-    return self
+    super(...r)
+    this.value = value
   }
   
   // This will be called via the client-side object's proxy reference.
