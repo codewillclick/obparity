@@ -93,3 +93,54 @@ That behavior for identically called methods in both locations is identical... i
 I was originally trying to think of a way the server-side object could render the client-side object from its own source, serializing its methods on the way down and deserializing in the browser, but...
 
 For now, having a separate `client.js` is sufficient.  All the logic to handle when or how `getClientSource()` and `handleClientRequest()` are called is left to the server-side application requiring this module.
+
+## changelog
+
+Prior
+* v1.0.0
+  * ParityObject
+    * client object source pulls from separate file
+  * server-side use
+    * ParityObjects are initialized with manual url entry
+    * server app routes to specific ParityObjects manually
+  * client-side use
+    * ParityObjects are initialized with manual url entry
+  * module
+    * ParityObject
+
+Current
+* v1.1.0
+  * ParityObject
+    * ~~client object source pulls from separate file-~~
+    * **NEW: client object source renders from `getClientClass()`**
+      * (defaults to last static class property that _is_ a class)
+  * server-side use
+    * ParityObjects are initialized with manual url entry
+    * server app routes to specific ParityObjects manually
+  * client-side use
+    * ParityObjects are initialized with manual url entry
+  * module
+    * ParityObject
+    * **NEW: `compileSource
+
+Upcoming
+* v1.2.0
+  * ParityObject
+    * client object source renders from `getClientClass()`
+    * **NEW: `pair()` method allows for matching against specific server-side objects**
+  * **NEW: Manager**
+    * generates new ParityObjects based on added templates
+    * provides new ways to match client- and server-side objects
+    * manages incoming url+post-data, automatically mapping to respective managed server-side objects
+    * middleware method: url+post mapping (for express.js)
+    * middleware method: client source-getting (for express.js)
+  * server-side use
+    * server app routes to specific ParityObjects manually
+    * **NEW: server app uses Manager to route incoming requests**
+  * client-side use
+    * ParityObjects are initialized with manual url entry
+    * **NEW: ParityObjects have default class-level values for init params**
+  * module
+    * ParityObject
+    * `compileSource()`
+    * **NEW: Manager**
