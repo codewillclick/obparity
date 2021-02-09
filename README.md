@@ -4,7 +4,7 @@ Simple node.js library for creating objects that exist in tandem between client 
 
 ## philosophy
 
-The idea of having an object that behaves identically between client and server struck me one day and this is the result.
+The idea of having an object that behaves identically between client and server struck me one day and this is the result.  Where you call a method on the browser-side object, and it proxies to that exact same method on the server-side object.
 
 It's not streamlined, and I'm still working out how class extension will work with it smoothly, but the idea's down.
 
