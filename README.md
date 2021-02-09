@@ -44,7 +44,8 @@ Browsers would obviously need the client-side object.  But any node application 
 
 ## an actual example
 
-Assuming v1.2.0+...
+Assuming v1.2.0+ (though v1.1.0 on master already has this particular functionaility).
+
 Server-side `ValueSayer` object, likely in its own module.
 ```javascript
 let {ParityObject} = require('obparity')
