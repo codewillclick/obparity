@@ -10,6 +10,8 @@ function uid(pre) {
 }
 
 class ParityObject {
+	// TODO: Let's consider letting this rely on getClientMethods(), but still
+	//   passing a methods array to the client-side class on clientSource().
 	static methods = ['pair','ping']
 	static sourceClassId = null
 	
@@ -56,12 +58,13 @@ class ParityObject {
 	}
 	
 	// Get list of methods the client-side object will refer to the server for.
-	clientMethods() {
-		return this.constructor.getClientMethods()
+	clientMethods(...r) {
+		return this.constructor.getClientMethods(...r)
 	}
 	static getClientMethods() {
 		let B,A = this
 		let i=0, r = []
+		// Collect parent class chain for mapping.
 		while (i < 1000 && A && A.name && A.name !== 'Function') {
 			r.push(A)
 			B = Object.getPrototypeOf(A)
@@ -72,6 +75,7 @@ class ParityObject {
 		}
 		if (i === 1000)
 			throw new Error('getClientMethods() reached loop maximum')
+		// Take unique values from full class list only, and return them.
 		r = r.reduce((a,b) => b.methods.map(c => a.add(c)) && a,new Set())
 		return Array.from(r)
 	}
@@ -136,6 +140,10 @@ class ParityObject {
 			return await f.apply(this,r)
 		}
 		else {
+			// TODO: If overriding handleClientRequest(), it may be useful to return
+			//   the initial ob param, rather than throwing an Error, so the
+			//   overriding method can just handle things, instead.  Or maybe it can
+			//   just use a try/catch block, but... that feels inelegant.
 			throw new Error(`unhandled request ob type (${typeof ob.type})`)
 		}
 	}
@@ -192,7 +200,7 @@ class ParityObject {
 			
 			// This will be used multiple times.
 			let f = (prop) => async function() {
-				let x = await fetch(self.fetchUrl,{
+				let x = await fetch(self.fetchUrl,self.modMessage({
 					method:'POST',
 					headers: { 'content-type':'application/json' },
 					body:JSON.stringify({
@@ -202,7 +210,7 @@ class ParityObject {
 						id:self.parityId,
 						classId:self.constructor.sourceClassId || null
 					})
-				})
+				}) )
 				return x.json()
 			}
 
@@ -225,6 +233,12 @@ class ParityObject {
 					return this.methods.has(prop) && f(prop) || undefined
 				}).bind(this)
 			})
+		}
+		
+		// This should be overridden in cases where unique properties are added to
+		// the object being sent server-side via POST request on proxy call.
+		modMessage(ob) {
+			return ob
 		}
 	}
 }
@@ -289,14 +303,18 @@ class Manager {
 		this.unpaired = {}
 		this.addressed = {}
 		this.matchPatterns = this._initPatterns(param && param.patterns || [])
-		// Default to true on this one.
-		this.createOnEmpty = param && (param.createOnEmpty ? true : false) || true
+		// Default to NOT true on this one.
+		//this.createOnEmpty = param && (param.createOnEmpty ? true : false) || true
+		this.createOnEmpty = param && (param.createOnEmpty ? true : false)
 		// There should be buckets of unpaired pobs, to be picked from when a new
 		// pair() request comes in.
 		// 
 		// ... But how should they be divided?  I guess... by classId?
 		// This presents a problem when the server goes down but the client doesn't.
 		// All the old classIds are active client-side but the server says "nope".
+		if (this.createOnEmpty)
+			throw new Error('.createOnEmpty was decided a flawed precept, ' +
+				'so this Error will be thrown until this idea is further explored')
 	}
 	
 	_initPatterns(r) {
