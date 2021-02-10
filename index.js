@@ -336,12 +336,17 @@ class Manager {
 		// ASSUMES: app.post()
 		return async (req,res,next) => {
 			let a = await this.evaluate(req.url,req.body)
+				.catch(e => {
+					// TODO: Or should this send that {err:something} object?
+					res.sendStatus(500)
+				})
 			a && res.send(JSON.stringify(a)) || res.sendStatus(500)
 		}
 	}
 	expressSource(param) {
+		// Return source dynamically generated between all class types Manager
+		// is currently storing.
 		let self = this
-		// TODO: Throw the compiled source in another middleware func.
 		return async (req,res,next) => {
 			let s = await self.compileSource(param)
 			res.set({ 'content-type':'application/javascript' })
@@ -372,6 +377,9 @@ class Manager {
 		stack.push(pob)
 		return this
 	}
+	// TODO: The match param is still iffy.  Does anything even pull from the
+	//   this.addressed bucket?  It looks like it only tries if id == null, which
+	//   *wouldn't* be true, if pair was called to begin with.
 	acceptMatch(pob) {
 		// This is for objects intended to be matched with their incoming urls.
 		let k = this._urlPatternMatch(pob.fetchUrl)
