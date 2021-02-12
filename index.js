@@ -182,8 +182,8 @@ class ParityObject {
 			// Meant to synchronize client-side object, though not strictly necessary
 			// if the url is provided through the constructor.  *Could* become vitally
 			// important once authorization and such is thrown into the mix.
-			this.pair = async (auth) => {
-				let a = await this.proxy.pair(auth) // I guess... think about auth later?
+			this.pair = async (...auth) => {
+				let a = await this.proxy.pair(...auth) // think about auth later?
 				if (!a)
 					throw new Error('pairing failed completely')
 				if (!a.err) { // reserve .err as a property for server's pair()
@@ -301,7 +301,10 @@ class Manager {
 		this.templates = {}
 		this.paired = {}
 		this.unpaired = {}
+		this.unpairedRefs = {}
+		// ^ pobs are to be removed from this on placement in this.paired
 		this.addressed = {}
+		this.sessions = {}
 		this.matchPatterns = this._initPatterns(param && param.patterns || [])
 		// Default to NOT true on this one.
 		//this.createOnEmpty = param && (param.createOnEmpty ? true : false) || true
@@ -338,7 +341,8 @@ class Manager {
 			let a = await this.evaluate(req.url,req.body)
 				.catch(e => {
 					// TODO: Or should this send that {err:something} object?
-					res.sendStatus(500)
+					console.log('throw this?',req.url,'\n',e.stack)
+					//res.sendStatus(500)
 				})
 			a && res.send(JSON.stringify(a)) || res.sendStatus(500)
 		}
@@ -368,18 +372,31 @@ class Manager {
 		return M.compileSource(r,param)
 	}
 	
-	accept(pob) {
+	accept(pob,sessionKey,sessionId) {
 		// In case the pob wasn't created with the Manager, add it in like this.
 		let stack = this.unpaired[pob.constructor.sourceClassId]
 		if (!stack)
 			stack = this.unpaired[pob.constructor.sourceClassId] = []
 		// Push it into the appropriate stack and... I guess that's it.
 		stack.push(pob)
+		// Add in this reference for use by old-session deletion process.
+		// NOTE: I need to clean up the logic behind all this, but... later...
+		if (sessionKey && sessionId) {
+			// NOTE: Honestly, all this work to make a hacky solution feasible.  I'm
+			//   seriously gonna put Manager session buckets in as a feature in
+			//   v1.2.1.
+			this.unpairedRefs[sessionKey] =
+				this.unpairedRefs[sessionKey] || {}
+			this.unpairedRefs[sessionKey][sessionId] =
+				this.unpairedRefs[sessionKey][sessionId] || new Set()
+			this.unpairedRefs[sessionKey][sessionId].add(pob.parityId)
+		}
 		return this
 	}
 	// TODO: The match param is still iffy.  Does anything even pull from the
 	//   this.addressed bucket?  It looks like it only tries if id == null, which
-	//   *wouldn't* be true, if pair was called to begin with.
+	//   *wouldn't* be true, if pair was called to begin with.  ... Though I guess
+	//   for pobs where pair() is *never* called, it'd be fine?
 	acceptMatch(pob) {
 		// This is for objects intended to be matched with their incoming urls.
 		let k = this._urlPatternMatch(pob.fetchUrl)
@@ -404,11 +421,21 @@ class Manager {
 			this.addTemplate(k,ob[k])
 		return this
 	}
-	create(k,match) {
+	create(k,match,sessionKey,sessionId) {
+		// HACK: I don't like including sessionKey and sessionId here
+		if (typeof match !== 'boolean') {
+			// Shift perceived params over one, assuming false for match.
+			sessionId = sessionKey
+			sessionKey = match
+			match = false
+		}
 		let p = this.templates[k]
 		console.log('creating',p[0],p.slice(1))
 		let pob = new p[0](...p.slice(1))
-		match && this.acceptMatch(pob) || this.accept(pob)
+		if (match)
+			this.acceptMatch(pob)
+		else
+			this.accept(pob,sessionKey,sessionId)
 		return pob
 	}
 	
@@ -430,12 +457,94 @@ class Manager {
 			//     . Should the Manager attach some new property to all managed
 			//       objects, and keep a table on hand that can pick them out of their
 			//       respective buckets?
+			//
+			// issue#13: pair(sessionKey,sessionId)
+			//   . this is what we're going with here
+			//   . there are two arguments
+			//     . a table is accessed for session key/id storage
+			//     . this.sessions will work
+
+			// If it doesn't match the sessionKey/Id format, DESTROY IT.
+			// So... sessionKey/Id validation.
+			let session
+			if (ob.args.length !== 2) {
+				throw new Error(`invalid exclusive pair attempt (args: ${ob.args})`)
+			}
+			else {
+				let [key,id] = ob.args
+				if (!this.sessions[key]) {
+					// Session doesn't exist yet, so make it.
+					this.sessions[key] = {
+						id:id,
+						refs: {} // these should point to pobs in this.paired
+					}
+				}
+				session = this.sessions[key]
+				if (this.sessions[key].id === id) {
+					// If this id for this session already exists, do... nothing?
+					// The actual addition to the session's refs table happens only on a
+					// successful pairing.
+
+					// NOTE: Ordering it like this means that it's not the first new
+					//   *successful* pairing that clears out all the old session's pobs,
+					//   but the first *attempt* at pairing with a new session id.
+					//   Well... that's okay, I guess.  As long as authorization happens
+					//   before this point.
+					// 
+					// WARNING: But wait... wouldn't authorization happen when calling
+					//   handleClientRequest()?  That happens later in this function.
+					//   Hmmm... Right now, nothing is assigned til after that's called,
+					//   except I guess for adding the new session to sessions.  Maybe
+					//   we'll put this logic in after?  That way if the server-side
+					//   object's pair() fails, we can just forget any of this happened?
+				}
+				else {
+					// Otherwise, it's time to *clean house*!
+					// Gather all parity keys to remove.
+					let karr = []
+					for (let sid in this.unpairedRefs[key]) {
+						// Like the parity keys of non-new-id unpaired objects.
+						if (sid === id)
+							continue
+						for (let parityId of this.unpairedRefs[key][sid])
+							karr.push(parityId)
+						delete this.unpairedRefs[key][sid] // just delete the whole Set
+					}
+					for (let k in session.refs) {
+						karr.push(k)
+					}
+					for (let k of new Set(karr)) {
+						// Clear out any references paired against the current session.
+						// First, let's clear unpaired... which *is* inefficeint like this.
+						let r = this.unpaired[ob.classId]
+						if (r) {
+							for (let i=r.length-1; i >= 0; --i)
+								if (r[i].parityId === k)
+									r.splice(i,1) // deletes refs one-by-one from stack array
+									// ^ though... there *should* only be one match...
+									//   will rethink, later; this is provably viable, if gross
+						}
+						if (this.paired[k])
+							delete this.paired[k]
+						if (session.refs[k])
+							delete session.refs[k]
+					}
+					// NOTE: But what about this.unpaired?  Wouldn't there be leaks there?
+					//   Hmm, proper Manager session buckets would go a long way to deal
+					//   with that.  There'd be a variety of paired/unpaired... parings,
+					//   and they'd live and die TOGETHER-ER-ER-ERrrrr...
+					// Set the session id.
+					session.id = id
+				}
+			}
+
 			let pob
 			console.log('new pair!',url,ob)
 			// Pull a pob out of the appropriate unpaired bucket.
 			let stack = this.unpaired[ob.classId]
 			console.log('picking stack',stack)
 			if (!stack || !stack.length) {
+				/*
 				if (this.createOnEmpty && ob.args[0] && ob.args[0].template) {
 					pob = this.create(
 						ob.args[0].template,
@@ -444,7 +553,8 @@ class Manager {
 					console.log('created a new guy!',pob,pob.fetchUrl,pob.parityId)
 				}
 				else
-					throw new Error(`no pobs of class id (${ob.classId}) available`)
+				//*/
+				throw new Error(`no pobs of class id (${ob.classId}) available`)
 			}
 			else {
 				console.log('stack',stack)
@@ -455,10 +565,14 @@ class Manager {
 			console.log('a',a,'requst result')
 			if (!a)
 				throw new Error('pairing failed')
-			// And put the pob into the paired table!
 			if (this.paired[pob.parityId])
 				throw new Error(`duplicate id! (${pob.parityId})`)
+			// And put the pob into the paired and session tables!
 			this.paired[pob.parityId] = pob
+			session.refs[pob.parityId] = pob
+			delete this.unpairedRefs[pob.parityId]
+			// Then pop that same element out of the stack, so only a single reference
+			// exists between this.paired and this.unpaired.
 			if (stack && stack.length) {
 				let b = stack.pop() // pop here once transaction was a success
 				console.log('pop out of stack',b.parityId)
