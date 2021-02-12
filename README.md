@@ -150,3 +150,7 @@ Upcoming
     * ParityObject
     * `compileSource()`
     * **NEW: Manager**
+* v1.2.1
+  * Manager
+    * [session buckets](#16) and bucket templates
+      * allowing for easier organization of created and removed ParityObjects
