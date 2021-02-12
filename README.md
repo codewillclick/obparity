@@ -83,7 +83,7 @@ The server app might contain something like...
 let sayer = new ValueSayer('stupendosity!','/sayer/1')
 
 app.post('/sayer/1', async (req,res) => {
-  res.send(JSON.stringify(await sayer.handleClientRequest(req.body)))
+  res.json(await sayer.handleClientRequest(req.body))
 })
 ...
 ```
@@ -94,11 +94,10 @@ let value = await sayer.sayit('I demand')
 console.log(value)
 // ^ This will output, {value:"I demand stupendosity!"}
 ```
-Note that `await sayer.sayit('I demand')` will return `{value:"I demand stupendosity!"}` on both the client _and_ server.
-
-That behavior for identically called methods in both locations is identical... is a _premise_, and must be maintained for extending classes to uphold the philosphy behind the `obparity` module.
 
 Next is an example using a `Manager` class.
+
+... Somewhere.
 
 
 ## changelog
@@ -151,3 +150,7 @@ Upcoming
     * ParityObject
     * `compileSource()`
     * **NEW: Manager**
+* v1.2.1
+  * Manager
+    * session buckets and bucket templates
+      * allowing for easier organization of created and removed ParityObjects
