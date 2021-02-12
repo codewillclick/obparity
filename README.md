@@ -152,5 +152,5 @@ Upcoming
     * **NEW: Manager**
 * v1.2.1
   * Manager
-    * [session buckets](#16) and bucket templates
+    * session buckets and bucket templates
       * allowing for easier organization of created and removed ParityObjects
