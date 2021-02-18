@@ -128,7 +128,21 @@ class ParityObject {
 	// one of the server-side client methods.
 	async handleClientRequest(ob) {
 		if (ob.type === 'call') {
-			if (!this.constructor.methods.includes(ob.method))
+			// Loop up constructor.methods arrs...
+			let hasIt = false, con = this.constructor
+			while (con.name !== 'Function' && con.methods) {
+				// TODO: Just throw the error if this[ob.method] isn't found, instead
+				//   of this messy logic.
+				if (con.methods.includes(ob.method)) {
+					hasIt = true
+					break
+				}
+				let a = Object.getPrototypeOf(con)
+				if (a === con)
+					break
+				con = a
+			}
+			if (!hasIt)
 				throw new Error(
 					`(${ob.method}) is not a ${this.constructor.name}.methods value`)
 			let f = this[ob.method]
